@@ -52,7 +52,7 @@ void loop() {
   handleButtons();
   handleResponses();
   handleNoise();
-  sendData(); 
+  handleCommunication(); 
 }
 
 void printIPAddress()
@@ -158,7 +158,7 @@ void printCounters() {
     Serial.println();
 }
 
-static int sendData(float avgNoise, float avgSound, float noiseTime, float maxNoiseDuration, float silenceTime, float maxSilenceDuration) {
+static int sendData() {
    printCounters();
   
    if (client.connect(server, 80)) {
@@ -170,27 +170,16 @@ static int sendData(float avgNoise, float avgSound, float noiseTime, float maxNo
       client.print("&field1=");
       client.print(moodCounters[0]);
     }
-    client.print("&field2=");
-    client.print(avgNoise);
-
     if (moodCounters[1] > 0) {
-      client.print("&field3=");
+      client.print("&field2=");
       client.print(moodCounters[1]);
     }
-    
-    client.print("&field4=");
-    client.print(noiseTime);
-    client.print("&field5=");
-    client.print(avgSound);
-    client.print("&field6=");
-    client.print(silenceTime);
-    client.print("&field7=");
-    client.print(maxSilenceDuration);
-    
-    if (moodCounters[2] > 0) {
-      client.print("&field8=");
+     if (moodCounters[3] > 0) {
+      client.print("&field3=");
       client.print(moodCounters[2]);
     }
+    
+   
     client.println(" HTTP/1.0");    
     client.println("Connection: close");
     client.println();
@@ -224,44 +213,15 @@ void initNoise() {
 }
 
 
-static unsigned long lastSampleTime = 0;
-static unsigned long noiseStartTime = 0;
-static unsigned long silenceStartTime = 0;
-static unsigned long noiseTime = 0;
-static unsigned long silenceTime = 0;
 
-static unsigned long sumOfNoises = 0;
-static unsigned long sumOfSound = 0;
 
-static unsigned long ticks = 0;
 
-static unsigned int maxSoundWithinInterval = 0;
-byte noise = 0;
 void handleNoise() {
-  ticks++;
-  unsigned long now = millis();
-  int sound = analogRead(NOISE_ANALOG_INPUT);
-  sumOfSound += sound;
-  if (digitalRead(NOISE_DIGITAL_INPUT)==LOW) {
-    if (noise == 0) {
-      noiseStartTime = now;
-      silenceTime += now - silenceStartTime;   
-    }       
-    sumOfNoises += sound;
-    if (sound > maxSoundWithinInterval) {      
-      maxSoundWithinInterval = sound;      
-    }
-    noise = 1;
-  } else {
-    if (noise == 1) {
-      silenceStartTime = now;
-      noise = 0;
-      noiseTime += now - noiseStartTime;    
-    }
-  }
+
 }
 
-void sendData() {
+static unsigned long lastSampleTime = 0;
+void handleCommunication() {
   unsigned long now = millis();
   if (now - lastSampleTime >= SERVER_SYNC_INTERVAL)
   {
@@ -269,19 +229,19 @@ void sendData() {
     digitalWrite(RED_LED, HIGH);    
     
     lastSampleTime = now;
-    int result = sendData(sumOfNoises/(double)(ticks/100), sumOfSound / (double)(ticks/100), noiseTime / (float)1000, 0, silenceTime / (float)1000, 0);
+    int result = sendData();
     if ( result == 0) {
-      sumOfNoises = 0;
-      noiseTime = 0;
-      silenceTime = 0;
-      sumOfSound = 0;
-      ticks = 0;
-  
-      for (byte i = 0; i < sizeof(moodCounters) / sizeof(*moodCounters); i++) {           
-        moodCounters[i] = 0;
-      }    
+      dataSent();
     }
   }  
+}
+
+void dataSent() {
+
+    for (byte i = 0; i < sizeof(moodCounters) / sizeof(*moodCounters); i++) {           
+      moodCounters[i] = 0;
+    }    
+  
 }
 
 void initStatusLeds() {
