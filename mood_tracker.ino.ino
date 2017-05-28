@@ -1,5 +1,9 @@
 #include <SPI.h>
 #include <UIPEthernet.h>
+#include <Wire.h>   
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE); 
+
 
 byte mac[] = {
   0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02
@@ -24,8 +28,12 @@ static const int NOISE_ANALOG_INPUT = A1;
 static const byte buttons[3] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON};
 byte moodCounters[3] = {0, 0, 0};
 
+unsigned long amplitudeSum = 0;
+unsigned int amplitudeSamples = 0;
+
 void setup() {
   initStatusLeds ();
+  initLcd();
   digitalWrite(GREEN_LED, HIGH);
   digitalWrite(BLUE_LED, HIGH);
   digitalWrite(RED_LED, HIGH);
@@ -47,6 +55,12 @@ void setup() {
   digitalWrite(RED_LED, LOW);  
 }
 
+
+void initLcd() {
+  lcd.begin(16, 2); 
+  lcd.backlight(); 
+  lcd.setCursor(0, 0);
+}
 void loop() {
   maintainEthernet();
   handleButtons();
@@ -62,6 +76,8 @@ void printIPAddress()
     // print the value of each byte of the IP address:
     Serial.print(Ethernet.localIP()[thisByte], DEC);
     Serial.print(".");
+    lcd.print(Ethernet.localIP()[thisByte], DEC);
+    lcd.print(".");
   }
 
   Serial.println();
@@ -178,10 +194,12 @@ static int sendData() {
       client.print("&field3=");
       client.print(moodCounters[2]);
     }
+
+    client.print("&field4=");
+    client.print(amplitudeSum / amplitudeSamples);
     
    
     client.println(" HTTP/1.0");    
-    client.println("Connection: close");
     client.println();
     return 0;
   } else {
@@ -209,15 +227,77 @@ void handleResponses() {
 void initNoise() {
   pinMode(NOISE_ANALOG_INPUT,INPUT);
   pinMode(NOISE_DIGITAL_INPUT, INPUT);
-
 }
 
 
-
-
-
+const int sampleWindow = 50; 
+const int maxScale = 8;
+unsigned int sample;
+unsigned int signalMax = 0;
+unsigned int signalMin = 3024;
+unsigned long startMillis;
+unsigned int peakToPeak = 0;
+byte noiseSampling = 0;
 void handleNoise() {
 
+  if (noiseSampling == 0) {
+    noiseSampling = 1;
+    startMillis = millis();
+    signalMax = 0;
+    signalMin = 3024;
+  }
+
+//collect two samples (we have to get two samples to get amplitude)
+for (int i=0; i<2; i++) {
+   
+   sample = analogRead(0);
+   if (sample < 1024)  // toss out spurious readings
+    {
+      if (sample > signalMax)
+      {
+        signalMax = sample;  // save just the max levels
+      }
+      else if (sample < signalMin)
+      {
+        signalMin = sample;  // save just the min levels
+      }
+    }
+}
+  if (millis() - startMillis > sampleWindow) {
+        amplitudeSamples++;
+        noiseSampling = 0;
+        peakToPeak = signalMax - signalMin;
+        amplitudeSum += peakToPeak; 
+
+
+       lcd.setCursor(0, 0);
+        if (amplitudeSamples % 10 == 0) {
+          double average = amplitudeSum / (double)amplitudeSamples;
+          lcd.print(amplitudeSum);
+          lcd.print(" ");
+          lcd.print(amplitudeSamples);
+          lcd.print(" ");
+          lcd.print(average);
+          lcd.print("      ");
+    
+        }
+    
+      unsigned int sound = peakToPeak;
+      int level = peakToPeak * 16 / 400;
+    
+      lcd.setCursor(0, 1);
+      printNoiseLevel(level);
+        
+  }
+}
+
+void printNoiseLevel(int level) {
+    for (int i = 0; i< 16; i++) {
+    if (i<level)
+      lcd.print((char)B11111111); 
+   else 
+    lcd.print(" "); 
+  }
 }
 
 static unsigned long lastSampleTime = 0;
@@ -241,6 +321,9 @@ void dataSent() {
     for (byte i = 0; i < sizeof(moodCounters) / sizeof(*moodCounters); i++) {           
       moodCounters[i] = 0;
     }    
+    noiseSampling = 0;
+    amplitudeSum = 0;
+    amplitudeSamples = 0;
   
 }
 
