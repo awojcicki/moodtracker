@@ -11,7 +11,7 @@ byte mac[] = {
 
 EthernetClient client;
 char server[] = "api.thingspeak.com";
-const String API_KEY = "API_KEY_GOES_HERE";
+const String API_KEY = "9GIHVN0VJ2JYVIA5";
 const unsigned long SERVER_SYNC_INTERVAL = 30 * 1000UL;
 
 static const int GREEN_BUTTON = 9;
@@ -279,6 +279,14 @@ for (int i=0; i<2; i++) {
           lcd.print(" ");
           lcd.print(average);
           lcd.print("      ");
+
+          Serial.print(amplitudeSum);
+          Serial.print(" ");
+          Serial.print(amplitudeSamples);
+          Serial.print(" ");
+          Serial.print(average);
+          Serial.print("      ");
+          Serial.println("");
     
         }
     
